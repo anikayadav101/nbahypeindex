@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Data files (keep JSON for website, but ignore large temp files)
+*.log
+*.csv
+reddit_optimized_sentiment.json
+reddit_*.json
+reddit_*.csv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Server logs
+server.log
+ngrok.log
+reddit_collection*.log
+monitor.log
+
+# Temporary deployment folders
+netlify_deploy/
+

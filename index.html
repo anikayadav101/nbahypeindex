@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NBA Hype Index Leaderboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+        }
+        .table-row { cursor: pointer; transition: background-color 0.2s; }
+        .table-row:hover { background-color: #222 !important; }
+        .overhyped { background: #333; }
+        .underhyped { background: #1a1a1a; }
+        .overhyped:hover { background: #222 !important; }
+        .underhyped:hover { background: #222 !important; }
+        .sort-icon::after { content: ' ↕️'; }
+        .sort-asc::after { content: ' ↑'; }
+        .sort-desc::after { content: ' ↓'; }
+        
+        /* Visualization bars */
+        .viz-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            font-size: 11px;
+            margin-top: 4px;
+        }
+        .viz-bar-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .viz-label {
+            min-width: 40px;
+            font-weight: bold;
+        }
+        .viz-bar {
+            height: 12px;
+            min-width: 60px;
+            background: #333;
+            position: relative;
+            border: 1px solid #555;
+        }
+        .viz-bar-fill {
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+        .viz-bar-hype {
+            background: linear-gradient(90deg, #ff6b6b, #ff8787);
+        }
+        .viz-bar-perf {
+            background: linear-gradient(90deg, #51cf66, #69db7c);
+        }
+        
+        /* Expanded row card */
+        .expanded-row {
+            background: #1a1a1a !important;
+        }
+        .player-card {
+            padding: 16px;
+            background: #0f0f0f;
+            border: 2px solid #444;
+            border-radius: 8px;
+            margin: 8px 0;
+        }
+        .player-card-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 12px;
+        }
+        .player-card-photo {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #333, #555);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            color: #888;
+            border: 2px solid #444;
+        }
+        .player-card-info {
+            flex: 1;
+        }
+        .player-card-name {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        .player-card-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+        .stat-item {
+            padding: 8px;
+            background: #1a1a1a;
+            border-radius: 4px;
+            border: 1px solid #333;
+        }
+        .stat-label {
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+        }
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 4px;
+        }
+        
+        /* Title hover effect */
+        h1.cursor-help {
+            transition: opacity 0.2s;
+        }
+        h1.cursor-help:hover {
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body class="bg-black text-white min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl font-bold mb-4 cursor-help" 
+                onmouseover="showMethodology()" onmouseout="hideMethodology()"
+                title="Hover for methodology">NBA HYPE INDEX LEADERBOARD</h1>
+            <p class="text-lg">Comparing social media sentiment (Hype) against on-court performance for all players.</p>
+        </div>
+
+        <!-- Methodology Popup -->
+        <div id="methodology-popup" class="fixed top-4 right-4 bg-gray-900 border border-white p-6 rounded-lg shadow-lg z-50 hidden max-w-md">
+            <h3 class="text-lg font-bold mb-3 text-green-400">Methodology</h3>
+            <div class="text-sm space-y-2">
+                <div>
+                    <strong class="text-green-400">Performance Index:</strong><br>
+                    • PTS, REB, AST, STL, BLK normalized (0-1)<br>
+                    • MinMaxScaler normalization<br>
+                    • Career averages for all players
+                </div>
+                <div>
+                    <strong class="text-green-400">Hype Index:</strong><br>
+                    • Reddit sentiment analysis ONLY<br>
+                    • BERT-based multilingual sentiment model<br>
+                    • Real Reddit posts, comments, and engagement<br>
+                    • Based on actual Reddit discussions (r/nba, r/basketball, etc.)
+                </div>
+                <div>
+                    <strong class="text-green-400">Data Sources:</strong><br>
+                    • 5,095 total NBA players<br>
+                    • 97.9% real NBA statistics<br>
+                    • Reddit API - Real posts and sentiment analysis
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="mb-6 flex flex-wrap gap-4 items-end">
+            <div class="flex-1 min-w-64">
+                <label class="block text-sm mb-1">Search Players:</label>
+                <input type="text" id="search-input" placeholder="Type player name..." 
+                       class="w-full px-3 py-2 border border-white bg-black text-white rounded">
+            </div>
+            <div>
+                <label class="block text-sm mb-1">Sort By:</label>
+                <select id="sort-select" class="px-3 py-2 border border-white bg-black text-white">
+                    <option value="name-asc">Alphabetical (A-Z)</option>
+                    <option value="name-desc">Alphabetical (Z-A)</option>
+                    <option value="pIndex-desc">P-Index (Highest to Lowest)</option>
+                    <option value="pIndex-asc">P-Index (Lowest to Highest)</option>
+                    <option value="hIndex-desc">H-Index (Highest to Lowest)</option>
+                    <option value="hIndex-asc">H-Index (Lowest to Highest)</option>
+                    <option value="gap-desc" selected>Hype Gap (Highest to Lowest)</option>
+                    <option value="gap-asc">Hype Gap (Lowest to Highest)</option>
+                </select>
+            </div>
+            <div>
+                <button onclick="clearFilters()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded">
+                    Clear Filters
+                </button>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="mb-4 text-sm text-gray-400">
+            <span class="mr-4">Legend:</span>
+            <span class="mr-4">🟫 Overrated (Hype > Performance)</span>
+            <span class="mr-4">⬜ Underrated (Performance > Hype)</span>
+            <span>⚪ Balanced</span>
+        </div>
+
+        <!-- Table -->
+        <div class="overflow-x-auto">
+            <table class="w-full border-collapse border border-white">
+                <thead>
+                    <tr class="bg-gray-800">
+                        <th class="border border-white p-3 text-left cursor-pointer" onclick="sort('name')">
+                            Player Name <span class="sort-icon"></span>
+                        </th>
+                        <th class="border border-white p-3 text-left cursor-pointer" onclick="sort('pIndex')">
+                            P-Index <span class="sort-icon"></span>
+                        </th>
+                        <th class="border border-white p-3 text-left cursor-pointer" onclick="sort('hIndex')">
+                            H-Index <span class="sort-icon"></span>
+                        </th>
+                        <th class="border border-white p-3 text-left cursor-pointer" onclick="sort('gap')">
+                            Hype Gap <span class="sort-icon"></span>
+                        </th>
+                        <th class="border border-white p-3 text-left">
+                            Hype vs Performance
+                        </th>
+                    </tr>
+                </thead>
+                <tbody id="table-body">
+                    <tr>
+                        <td colspan="5" class="border border-white p-8 text-center">
+                            Loading players...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Stats -->
+        <div class="mt-4 text-sm text-gray-400">
+            <span id="player-count">Loading...</span>
+        </div>
+    </div>
+
+    <script>
+        let allPlayers = [];
+        let currentPlayers = [];
+        let currentSort = { column: 'gap', direction: 'desc' };
+        let expandedRows = new Set();
+
+        async function loadData() {
+            console.log('Loading data...');
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '<tr><td colspan="5" class="border border-white p-8 text-center">Loading NBA players with real stats and career years...</td></tr>';
+
+            try {
+                const response = await fetch('all_players_real_sentiment_corrected.json');
+                if (!response.ok) throw new Error(`HTTP ${response.status}: Failed to load data`);
+
+                allPlayers = await response.json();
+                currentPlayers = [...allPlayers];
+
+                console.log('✅ Loaded', allPlayers.length, 'players');
+                applySort();
+                renderTable();
+            } catch (error) {
+                console.error('❌ Error loading data:', error);
+                tbody.innerHTML = `
+                    <tr><td colspan="5" class="border border-white p-8 text-center text-red-500">
+                        ❌ Error loading data: ${error.message}<br>
+                        <small>Make sure the server is running and all_players_real_sentiment_corrected.json exists</small>
+                    </td></tr>
+                `;
+            }
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('table-body');
+            const playerCount = document.getElementById('player-count');
+            
+            if (currentPlayers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="border border-white p-8 text-center text-gray-400">No players found</td></tr>';
+                playerCount.textContent = '0 players';
+                return;
+            }
+
+            tbody.innerHTML = '';
+            playerCount.textContent = `${currentPlayers.length} players`;
+
+            currentPlayers.forEach((player, index) => {
+                const playerId = `player-${index}`;
+                const isExpanded = expandedRows.has(player.name);
+                
+                // Determine if player is overrated or underrated
+                const isOverhyped = player.gap > 0.1;
+                const isUnderhyped = player.gap < -0.1;
+                const rowClass = isOverhyped ? 'overhyped' : isUnderhyped ? 'underhyped' : '';
+                const expandedClass = isExpanded ? 'expanded-row' : '';
+                
+                // Create visualization bars
+                const hypePercent = Math.min(100, (player.hIndex / 1.0) * 100);
+                const perfPercent = Math.min(100, (player.pIndex / 1.0) * 100);
+                
+                // Add rating status labels
+                let ratingStatus = '';
+                let gapColor = '';
+                if (player.gap > 0.1) {
+                    ratingStatus = ' (Overrated)';
+                    gapColor = 'text-red-400';
+                } else if (player.gap < -0.1) {
+                    ratingStatus = ' (Underrated)';
+                    gapColor = 'text-green-400';
+                } else {
+                    ratingStatus = ' (Balanced)';
+                    gapColor = 'text-gray-400';
+                }
+
+                // Main row
+                const row = document.createElement('tr');
+                row.className = `table-row ${rowClass} ${expandedClass}`;
+                row.dataset.playerName = player.name;
+                row.onclick = (e) => {
+                    // Don't toggle if clicking on a sortable header or other interactive elements
+                    if (e.target.tagName === 'TH' || e.target.closest('th')) {
+                        return;
+                    }
+                    toggleRow(player.name);
+                };
+                
+                row.innerHTML = `
+                    <td class="border border-white p-3">${player.name}</td>
+                    <td class="border border-white p-3">${player.pIndex.toFixed(3)}</td>
+                    <td class="border border-white p-3">${player.hIndex.toFixed(3)}</td>
+                    <td class="border border-white p-3 ${gapColor}">${player.gap.toFixed(3)}${ratingStatus}</td>
+                    <td class="border border-white p-3">
+                        <div class="viz-container">
+                            <div class="viz-bar-container">
+                                <span class="viz-label">Hype</span>
+                                <div class="viz-bar">
+                                    <div class="viz-bar-fill viz-bar-hype" style="width: ${hypePercent}%"></div>
+                                </div>
+                            </div>
+                            <div class="viz-bar-container">
+                                <span class="viz-label">Perf</span>
+                                <div class="viz-bar">
+                                    <div class="viz-bar-fill viz-bar-perf" style="width: ${perfPercent}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+                
+                // Expanded card row (initially hidden)
+                if (isExpanded) {
+                    const cardRow = document.createElement('tr');
+                    cardRow.className = `expanded-row ${rowClass}`;
+                    cardRow.id = `card-${player.name}`;
+                    
+                    const playerInitials = player.name.split(' ').map(n => n[0]).join('').toUpperCase();
+                    const careerYears = player.years_active || 'N/A';
+                    const startYear = player.start_year || 'N/A';
+                    const endYear = player.end_year || 'N/A';
+                    const avgSentiment = player.avg_sentiment !== undefined ? player.avg_sentiment.toFixed(3) : 'N/A';
+                    const avgEngagementNum = player.avg_engagement !== undefined ? player.avg_engagement : null;
+                    const avgEngagement = avgEngagementNum !== null ? Math.round(avgEngagementNum) : 'N/A';
+                    const totalPosts = player.total_posts || 0;
+                    const totalEngagement = (avgEngagementNum !== null && totalPosts > 0) ? Math.round(avgEngagementNum * totalPosts) : 'N/A';
+                    
+                    // Format sentiment with color
+                    let sentimentColor = 'text-gray-400';
+                    if (avgSentiment !== 'N/A') {
+                        const sent = parseFloat(avgSentiment);
+                        if (sent > 0.1) sentimentColor = 'text-green-400';
+                        else if (sent < -0.1) sentimentColor = 'text-red-400';
+                    }
+                    
+                    cardRow.innerHTML = `
+                        <td colspan="5" class="border border-white p-0">
+                            <div class="player-card">
+                                <div class="player-card-header">
+                                    <div class="player-card-photo">${playerInitials}</div>
+                                    <div class="player-card-info">
+                                        <div class="player-card-name">${player.name}</div>
+                                        <div class="text-sm text-gray-400">
+                                            Career: ${startYear} - ${endYear} (${careerYears} years)
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="player-card-stats">
+                                    <div class="stat-item">
+                                        <div class="stat-label">Reddit Posts</div>
+                                        <div class="stat-value text-blue-400">${totalPosts}</div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-label">Avg Engagement</div>
+                                        <div class="stat-value text-yellow-400">${typeof avgEngagement === 'number' ? avgEngagement.toLocaleString() : avgEngagement}</div>
+                                        <div class="text-xs text-gray-500 mt-1">likes/post</div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-label">Avg Sentiment</div>
+                                        <div class="stat-value ${sentimentColor}">${avgSentiment}</div>
+                                        <div class="text-xs text-gray-500 mt-1">from Reddit</div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-label">Total Engagement</div>
+                                        <div class="stat-value text-purple-400">${typeof totalEngagement === 'number' ? totalEngagement.toLocaleString() : totalEngagement}</div>
+                                        <div class="text-xs text-gray-500 mt-1">total likes</div>
+                                    </div>
+                                    <div class="stat-item">
+                                        <div class="stat-label">Hype Status</div>
+                                        <div class="stat-value ${gapColor}">${ratingStatus.replace(' (', '').replace(')', '')}</div>
+                                        <div class="text-xs text-gray-500 mt-1">Gap: ${player.gap.toFixed(3)}</div>
+                                    </div>
+                                    ${careerYears !== 'N/A' ? `
+                                    <div class="stat-item">
+                                        <div class="stat-label">Career Length</div>
+                                        <div class="stat-value">${careerYears} years</div>
+                                        <div class="text-xs text-gray-500 mt-1">${startYear} - ${endYear}</div>
+                                    </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(cardRow);
+                }
+            });
+
+            updateSortIcons();
+        }
+
+        function sort(column) {
+            if (currentSort.column === column) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.column = column;
+                currentSort.direction = 'asc';
+            }
+
+            // Update dropdown to match
+            const sortSelect = document.getElementById('sort-select');
+            sortSelect.value = `${column}-${currentSort.direction}`;
+
+            applySort();
+            renderTable();
+        }
+
+        function updateSortIcons() {
+            document.querySelectorAll('.sort-icon').forEach(icon => {
+                icon.className = 'sort-icon';
+            });
+
+            const currentIcon = document.querySelector(`th[onclick="sort('${currentSort.column}')"] .sort-icon`);
+            if (currentIcon) {
+                currentIcon.className = `sort-icon sort-${currentSort.direction}`;
+            }
+        }
+
+        function filterPlayers() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+
+            currentPlayers = allPlayers.filter(player => {
+                return player.name.toLowerCase().includes(searchTerm);
+            });
+
+            applySort();
+            renderTable();
+        }
+
+        function applySort() {
+            const sortValue = document.getElementById('sort-select').value;
+            const [column, direction] = sortValue.split('-');
+            
+            currentSort.column = column;
+            currentSort.direction = direction;
+
+            currentPlayers.sort((a, b) => {
+                let aVal = a[column];
+                let bVal = b[column];
+
+                if (typeof aVal === 'string') {
+                    aVal = aVal.toLowerCase();
+                    bVal = bVal.toLowerCase();
+                }
+
+                if (direction === 'asc') {
+                    return aVal > bVal ? 1 : -1;
+                } else {
+                    return aVal < bVal ? 1 : -1;
+                }
+            });
+        }
+
+        function toggleRow(playerName) {
+            if (expandedRows.has(playerName)) {
+                expandedRows.delete(playerName);
+            } else {
+                expandedRows.add(playerName);
+            }
+            renderTable();
+        }
+
+        function clearFilters() {
+            document.getElementById('search-input').value = '';
+            document.getElementById('sort-select').value = 'gap-desc';
+            currentPlayers = [...allPlayers];
+            expandedRows.clear();
+            applySort();
+            renderTable();
+        }
+
+        function showMethodology() {
+            document.getElementById('methodology-popup').classList.remove('hidden');
+        }
+
+        function hideMethodology() {
+            document.getElementById('methodology-popup').classList.add('hidden');
+        }
+
+        // Event listeners
+        document.getElementById('search-input').addEventListener('input', filterPlayers);
+        document.getElementById('sort-select').addEventListener('change', () => {
+            applySort();
+            renderTable();
+        });
+
+        // Load data when page loads
+        window.addEventListener('load', loadData);
+    </script>
+</body>
+</html>
