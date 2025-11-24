@@ -244,7 +244,7 @@
             tbody.innerHTML = '<tr><td colspan="5" class="border border-white p-8 text-center">Loading NBA players with real stats and career years...</td></tr>';
 
             try {
-                const response = await fetch('all_players_real_sentiment_corrected.json');
+                const response = await fetch('reddit_optimized_sentiment.json');
                 if (!response.ok) throw new Error(`HTTP ${response.status}: Failed to load data`);
 
                 allPlayers = await response.json();
@@ -258,7 +258,7 @@
                 tbody.innerHTML = `
                     <tr><td colspan="5" class="border border-white p-8 text-center text-red-500">
                         ❌ Error loading data: ${error.message}<br>
-                        <small>Make sure the server is running and all_players_real_sentiment_corrected.json exists</small>
+                        <small>Make sure the server is running and reddit_optimized_sentiment.json exists</small>
                     </td></tr>
                 `;
             }
